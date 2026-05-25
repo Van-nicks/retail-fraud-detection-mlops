@@ -1,0 +1,16 @@
+# Data files
+raw/
+processed/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyCharm
+.idea/
+
+# Environment
+.env
+venv/
+*.env

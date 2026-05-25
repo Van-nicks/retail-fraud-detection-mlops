@@ -6,7 +6,9 @@ import os
 
 def data_preprocessing():
     df = pd.read_csv('raw/retail_fraud_detection_100k.csv')
-    df = df.drop(columns=['transaction_id', 'customer_id', 'transaction_timestamp', 'fraud_risk'])
+    df = df.drop(columns=['transaction_id', 'customer_id', 'transaction_timestamp', 'fraud_risk',
+                          'unusual_amount_flag', 'unusual_location_flag', 'velocity_flag',
+                          'previous_fraud_flag', 'high_risk_device_flag'])
 
     categorical_cols = ['payment_method', 'device_type', 'location', 'merchant_category']
     le = LabelEncoder()

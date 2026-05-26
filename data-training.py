@@ -3,6 +3,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_auc_score
 import mlflow
 import mlflow.sklearn
+import os
+import joblib
 
 
 def train():
@@ -29,9 +31,14 @@ def train():
         mlflow.log_param("n_estimators", 100)
         mlflow.log_param("class_weight", "balanced")
         mlflow.log_metric("auc", roc_auc_score(y_test, y_prob))
-        mlflow.sklearn.log_model(rf_model, "model")
+        mlflow.sklearn.log_model(rf_model, name="model")
         print("MLflow logging complete")
 
+    os.makedirs('models', exist_ok=True)
+    joblib.dump(rf_model, 'models/rf_model.pkl')
+    joblib.dump(list(X_train.columns), 'models/feature_columns.pkl')
+    print("Model exported to models/rf_model.pkl")
+    print("Feature columns exported to models/feature_columns.pkl")
 
 if __name__ == '__main__':
     train()

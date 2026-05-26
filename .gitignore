@@ -2,6 +2,7 @@
 raw/
 processed/
 mlruns/
+models/
 mlflow.db
 
 # Python

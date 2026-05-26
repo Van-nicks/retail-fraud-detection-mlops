@@ -1,0 +1,9 @@
+raw/
+processed/
+mlruns/
+mlflow.db
+.git/
+__pycache__/
+*.pyc
+.env
+*.csv

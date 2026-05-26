@@ -4,6 +4,7 @@ processed/
 mlruns/
 models/
 mlflow.db
+fraud-detection-key.pem
 
 # Python
 __pycache__/

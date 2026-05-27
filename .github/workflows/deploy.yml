@@ -1,0 +1,54 @@
+name: Deploy Retail Fraud Detection API
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push Docker image
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --platform linux/amd64 \
+            -t 022694873472.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest \
+            --push \
+            .
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region eu-west-2 | docker login \
+              --username AWS \
+              --password-stdin \
+              022694873472.dkr.ecr.eu-west-2.amazonaws.com
+            docker pull 022694873472.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest
+            docker stop fraud-api || true
+            docker rm fraud-api || true
+            docker run -d \
+              -p 8000:8000 \
+              --name fraud-api \
+              --restart unless-stopped \
+              022694873472.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest

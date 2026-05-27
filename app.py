@@ -2,13 +2,30 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import pandas as pd
 import joblib
-import os
+import boto3
+import tempfile
 
 app = FastAPI(title="Retail Fraud Detection API", version="0.1")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model = joblib.load(os.path.join(BASE_DIR, "models", "rf_model.pkl"))
-feature_columns = joblib.load(os.path.join(BASE_DIR, "models", "feature_columns.pkl"))
+
+def load_model_from_s3():
+    s3 = boto3.client("s3", region_name="eu-west-2")
+    bucket = "fraud-detection-mlops-aws"
+
+    with tempfile.NamedTemporaryFile() as model_file:
+        s3.download_fileobj(bucket, "models/rf_model.pkl", model_file)
+        model_file.seek(0)
+        loaded_model = joblib.load(model_file.name)
+
+    with tempfile.NamedTemporaryFile() as cols_file:
+        s3.download_fileobj(bucket, "models/feature_columns.pkl", cols_file)
+        cols_file.seek(0)
+        loaded_columns = joblib.load(cols_file.name)
+
+    return loaded_model, loaded_columns
+
+
+model, feature_columns = load_model_from_s3()
 
 
 class TransactionFeatures(BaseModel):

@@ -3,55 +3,49 @@
 ## Docker
 
 ### Build image
-
-````bash
+```bash
 docker buildx build \
   --platform linux/amd64 \
   -t fraud-detection-api:latest \
   --load \
   .
-````
+```
 
 ### Run locally
-
-````bash
+```bash
 docker run -p 8000:8000 fraud-detection-api
-````
+```
 
 ---
 
 ## AWS Deployment
 
 ### Create ECR repository
-
-````bash
+```bash
 aws ecr create-repository \
   --repository-name fraud-detection-api \
   --region eu-west-2
-````
+```
 
 ### Authenticate Docker to ECR
-
-````bash
+```bash
 aws ecr get-login-password --region eu-west-2 | docker login \
   --username AWS \
   --password-stdin \
   <account-id>.dkr.ecr.eu-west-2.amazonaws.com
-````
+```
 
 ### Tag and push image to ECR
-
-````bash
+```bash
 docker tag fraud-detection-api:latest \
   <account-id>.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest
 
 docker push \
   <account-id>.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest
-````
+```
 
 ### Create key pair
-
-````bash
+```bash
 aws ec2 create-key-pair \
   --key-name fraud-detection-key \
   --region eu-west-2 \
@@ -59,11 +53,10 @@ aws ec2 create-key-pair \
   --output text > fraud-detection-key.pem
 
 chmod 400 fraud-detection-key.pem
-````
+```
 
 ### Create security group
-
-````bash
+```bash
 aws ec2 create-security-group \
   --group-name fraud-detection-sg \
   --description "Security group for fraud detection API" \
@@ -82,11 +75,10 @@ aws ec2 authorize-security-group-ingress \
   --port 8000 \
   --cidr 0.0.0.0/0 \
   --region eu-west-2
-````
+```
 
 ### Get latest Amazon Linux 2023 AMI
-
-````bash
+```bash
 aws ec2 describe-images \
   --owners amazon \
   --filters "Name=name,Values=al2023-ami-2023*-x86_64" \
@@ -94,11 +86,10 @@ aws ec2 describe-images \
   --query "sort_by(Images, &CreationDate)[-1].ImageId" \
   --output text \
   --region eu-west-2
-````
+```
 
 ### Launch EC2 instance
-
-````bash
+```bash
 aws ec2 run-instances \
   --image-id <ami-id> \
   --instance-type t3.micro \
@@ -106,11 +97,10 @@ aws ec2 run-instances \
   --security-group-ids <sg-id> \
   --region eu-west-2 \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=fraud-detection-api}]'
-````
+```
 
 ### Create and attach IAM role
-
-````bash
+```bash
 aws iam create-role \
   --role-name fraud-detection-ec2-role \
   --assume-role-policy-document '{
@@ -126,6 +116,14 @@ aws iam attach-role-policy \
   --role-name fraud-detection-ec2-role \
   --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
+aws iam attach-role-policy \
+  --role-name fraud-detection-ec2-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+
+aws iam attach-role-policy \
+  --role-name fraud-detection-ec2-role \
+  --policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
 aws iam create-instance-profile \
   --instance-profile-name fraud-detection-ec2-profile
 
@@ -137,54 +135,63 @@ aws ec2 associate-iam-instance-profile \
   --instance-id <instance-id> \
   --iam-instance-profile Name=fraud-detection-ec2-profile \
   --region eu-west-2
-````
+```
+
+### Allocate and attach Elastic IP
+```bash
+aws ec2 allocate-address \
+  --domain vpc \
+  --region eu-west-2
+
+aws ec2 associate-address \
+  --instance-id <instance-id> \
+  --allocation-id <allocation-id> \
+  --region eu-west-2
+```
 
 ### SSH into EC2
-
-````bash
-ssh -i fraud-detection-key.pem ec2-user@<public-ip>
-````
+```bash
+ssh -i fraud-detection-key.pem ec2-user@<elastic-ip>
+```
 
 ### On EC2 — install Docker
-
-````bash
+```bash
 sudo yum update -y
 sudo yum install -y docker
 sudo service docker start
+sudo systemctl enable docker
 sudo usermod -a -G docker ec2-user
 newgrp docker
-````
+```
 
 ### On EC2 — authenticate, pull and run
-
-````bash
+```bash
 aws ecr get-login-password --region eu-west-2 | docker login \
   --username AWS \
   --password-stdin \
   <account-id>.dkr.ecr.eu-west-2.amazonaws.com
 
-docker pull <account-id>.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest
+docker pull \
+  <account-id>.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest
 
 docker run -d \
   -p 8000:8000 \
   --name fraud-api \
   --restart unless-stopped \
   <account-id>.dkr.ecr.eu-west-2.amazonaws.com/fraud-detection-api:latest
-````
+```
 
 ### Verify
-
-````bash
+```bash
 docker ps
 curl http://localhost:8000/health
-````
+```
 
 ---
 
 ## Model Management
 
 ### Upload model files to S3
-
 ```bash
 aws s3 cp models/rf_model.pkl \
   s3://<bucket-name>/models/rf_model.pkl
@@ -194,7 +201,6 @@ aws s3 cp models/feature_columns.pkl \
 ```
 
 ### Verify S3 upload
-
 ```bash
 aws s3 ls s3://<bucket-name>/models/
 ```
@@ -204,7 +210,6 @@ aws s3 ls s3://<bucket-name>/models/
 ## Instance Management
 
 ### Stop instance
-
 ```bash
 aws ec2 stop-instances \
   --instance-ids <instance-id> \
@@ -212,7 +217,6 @@ aws ec2 stop-instances \
 ```
 
 ### Start instance
-
 ```bash
 aws ec2 start-instances \
   --instance-ids <instance-id> \
@@ -220,7 +224,6 @@ aws ec2 start-instances \
 ```
 
 ### Get current public IP
-
 ```bash
 aws ec2 describe-instances \
   --instance-ids <instance-id> \
@@ -234,7 +237,6 @@ aws ec2 describe-instances \
 ## CloudWatch Monitoring
 
 ### Create SNS topic for alerts
-
 ```bash
 aws sns create-topic \
   --name fraud-detection-alerts \
@@ -242,7 +244,6 @@ aws sns create-topic \
 ```
 
 ### Subscribe email to SNS topic
-
 ```bash
 aws sns subscribe \
   --topic-arn <topic-arn> \
@@ -252,7 +253,6 @@ aws sns subscribe \
 ```
 
 ### Create CloudWatch log group
-
 ```bash
 aws logs create-log-group \
   --log-group-name /fraud-detection/api \
@@ -260,7 +260,6 @@ aws logs create-log-group \
 ```
 
 ### Set log retention policy
-
 ```bash
 aws logs put-retention-policy \
   --log-group-name /fraud-detection/api \
@@ -268,7 +267,6 @@ aws logs put-retention-policy \
 ```
 
 ### On EC2 — install and configure CloudWatch agent
-
 ```bash
 sudo yum install -y amazon-cloudwatch-agent
 
@@ -280,14 +278,12 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
 ```
 
 ### Verify CloudWatch agent status
-
 ```bash
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a status
 ```
 
 ### Create health check alarm
-
 ```bash
 aws cloudwatch put-metric-alarm \
   --alarm-name fraud-api-health-check \
@@ -306,7 +302,6 @@ aws cloudwatch put-metric-alarm \
 ```
 
 ### Create memory alarm
-
 ```bash
 aws cloudwatch put-metric-alarm \
   --alarm-name fraud-api-memory-high \
